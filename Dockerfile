@@ -16,8 +16,9 @@ RUN npm install
 COPY . .
 
 # Generar Prisma Client antes de compilar
+RUN npx prisma migrate dev --name deploy
 RUN npx prisma generate
-RUN npx prisma migrate deploy
+
 # Compilar la aplicación
 RUN npm run build
 
