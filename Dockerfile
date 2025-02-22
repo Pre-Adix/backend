@@ -16,7 +16,6 @@ RUN npm install
 COPY . .
 
 # Generar Prisma Client antes de compilar
-RUN npx prisma migrate dev --name deploy
 RUN npx prisma generate
 
 # Compilar la aplicación
@@ -37,4 +36,5 @@ COPY --from=builder /app/prisma ./prisma
 EXPOSE 3000
 
 # Ejecutar migraciones antes de iniciar la app
-CMD ["node", "dist/main.js"]
+CMD ["npx", "prisma", "migrate", "deploy", "--preview-feature", "--skip-generate", "&&", "node", "dist/main.js"]
+# CMD ["node", "dist/main.js"]
