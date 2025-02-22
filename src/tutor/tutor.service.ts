@@ -66,7 +66,8 @@ export class TutorService {
       data: await this.prismaService.tutor.findMany({
         where: { deletedAt: null },
         take: limit,
-        skip: (page - 1) * limit
+        skip: (page - 1) * limit,
+        include: { students: true }
       })
     }
 

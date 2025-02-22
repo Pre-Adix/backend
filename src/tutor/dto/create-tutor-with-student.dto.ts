@@ -1,5 +1,5 @@
 import { ArrayMinSize, IsArray, IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength, Min, MinLength, ValidateNested } from "class-validator"
-import { StudentDto } from "./create-student.dto"
+import { StudentDto } from "../../student/dto/create-student.dto"
 import { Type } from "class-transformer"
 import { TutorTypeList } from "../../common/enums/type-tutor.enum"
 

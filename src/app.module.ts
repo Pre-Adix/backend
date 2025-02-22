@@ -3,7 +3,8 @@ import { TutorModule } from './tutor/tutor.module';
 import { EnrollmentModule } from './enrollment/enrollment.module';
 import { CycleModule } from './cycle/cycle.module';
 import { CareerModule } from './career/career.module';
+import { StudentModule } from './student/student.module';
 @Module({
-  imports: [TutorModule, EnrollmentModule, CycleModule, CareerModule],
+  imports: [TutorModule, EnrollmentModule, CycleModule, CareerModule, StudentModule],
 })
 export class AppModule {}
