@@ -17,7 +17,7 @@ COPY . .
 
 # Generar Prisma Client antes de compilar
 RUN npx prisma generate
-
+RUN npx prisma migrate deploy
 # Compilar la aplicación
 RUN npm run build
 
@@ -35,6 +35,5 @@ COPY --from=builder /app/prisma ./prisma
 # Exponer el puerto
 EXPOSE 3000
 
-RUN npx prisma migrate deploy
 # Ejecutar migraciones antes de iniciar la app
 CMD ["node", "dist/main.js"]
