@@ -1,0 +1,251 @@
+// Generador y fuente de datos
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums optimizados
+enum EnrollmentStatus {
+  ACTIVO
+  CANCELADO
+  PENDIENTE
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  TARJETA
+  TRANSFERENCIA_BANCARIA
+}
+
+enum PaymentStatus {
+  PENDIENTE
+  PAGADO
+  VENCIDO
+  CANCELADO
+}
+
+// enum InstallmentStatus {
+//   PENDIENTE
+//   PAGADO
+//   VENCIDO
+// }
+
+enum Gender {
+  MASCULINO
+  FEMENINO
+}
+
+enum TutorType {
+  PADRE
+  MADRE
+  TUTOR
+}
+
+enum Shift {
+  MANANA
+  TARDE
+  NOCHE
+}
+
+enum Modality {
+  PRESENCIAL
+  VIRTUAL
+}
+
+// Modelos optimizados
+model Tutor {
+  id           String     @id @default(uuid())
+  dni          String     @unique
+  firstName    String
+  lastName     String
+  email        String?    @unique
+  phone1       String     @unique
+  phone2       String?
+  type         TutorType
+  address      String
+  observation  String?
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  students     Student[]  // Un tutor puede tener uno o más estudiantes
+}
+
+model School {
+  id           String     @id @default(uuid())
+  name         String     @unique // Nombre de la escuela
+  address      String
+  
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  students     Student[]  // Una escuela puede tener varios estudiantes
+}
+
+model Student {
+  id           String     @id @default(uuid())
+  code         String     @unique // Código generado automáticamente
+  firstName    String
+  lastName     String
+  email        String?    @unique
+  phone        String?    @unique
+  address      String
+  image        String?
+  schoolId     String
+  gender       Gender
+  birthday     DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  tutorId      String
+  tutor        Tutor       @relation(fields: [tutorId], references: [id])
+  school       School      @relation(fields: [schoolId], references: [id])
+
+  attendances  Attendance[]
+  results      Result[]
+  enrollments  Enrollment[]
+  accountReceivable AccountReceivable[]
+}
+
+model Area {
+  id           String     @id @default(uuid())
+  name         String     @unique // Nombre del área: A, B, C, D
+  description  String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  careers      Career[]   // Un área puede tener varias carreras
+}
+
+model Career {
+  id           String     @id @default(uuid())
+  name         String     @unique // Nombre de la carrera
+  scoreMin     Decimal
+  scoreMax     Decimal
+  vacants      Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  areaId       String
+  area         Area       @relation(fields: [areaId], references: [id])
+  enrollments  Enrollment[]
+}
+
+model Cycle {
+  id           String     @id @default(uuid())
+  name         String     @unique // Nombre del ciclo
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  enrollments  Enrollment[]
+  exams        Exam[]
+}
+
+model Exam {
+  id           String     @id @default(uuid())
+  title        String
+  startTime    DateTime
+  endTime      DateTime
+  modality     Modality
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  cycleId      String
+  cycle        Cycle      @relation(fields: [cycleId], references: [id])
+  results      Result[]
+}
+
+model Result {
+  id           String     @id @default(uuid())
+  score        Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  examId       String?
+  studentId    String?
+
+  exam         Exam?      @relation(fields: [examId], references: [id])
+  student      Student?   @relation(fields: [studentId], references: [id])
+}
+
+model Attendance {
+  id           String     @id @default(uuid())
+  date         DateTime
+  present      Boolean
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  studentId    String?
+  student      Student?   @relation(fields: [studentId], references: [id])
+}
+
+model Enrollment {
+  id               String     @id @default(uuid())
+  startDate        DateTime
+  endDate          DateTime
+  studentId        String
+  cycleId          String
+  careerId         String
+  modality         Modality
+  shift            Shift      // Turno: MAÑANA, TARDE, NOCHE
+  credit           Boolean    @default(false) // Crédito
+  paymentCarnet    Boolean    @default(false) // Pago de carnet
+  carnetCost       Decimal    @db.Decimal(10, 2)
+  totalCost        Decimal    @db.Decimal(10, 2)  // Costo total de la matrícula
+  initialPayment   Decimal    @db.Decimal(10, 2) @default(0.00)
+  discounts        Decimal    @db.Decimal(10, 2) @default(0.00) // Descuentos
+  status           EnrollmentStatus @default(ACTIVO)
+  notes            String?
+
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+
+  student          Student    @relation(fields: [studentId], references: [id])
+  cycle            Cycle      @relation(fields: [cycleId], references: [id])
+  career           Career     @relation(fields: [careerId], references: [id])
+
+}
+
+model AccountReceivable {
+  id             String    @id @default(uuid())
+  studentId      String    
+  totalAmount    Decimal
+  pendingBalance Decimal
+  status         PaymentStatus
+  concept        String         // Concepto de la cuenta por cobrar (e.g., "MATRÍCULA", "PAGO CARNET")
+
+  student        Student    @relation(fields: [studentId], references: [id])
+  payments Payment[]
+
+  @@map("account_receivable")
+}
+
+model Payment {
+  id             String    @id @default(uuid())
+  accountReceivableId String
+  invoiceNumber  String
+  dueDate        DateTime
+  amountPaid     Decimal
+  paymentDate    DateTime  @default(now())
+  paymentMethod  PaymentMethod
+  status         PaymentStatus
+  notes          String?
+
+  accountReceivable   AccountReceivable @relation(fields: [accountReceivableId], references: [id])
+
+  @@map("payments")
+}
