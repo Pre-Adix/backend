@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -35,13 +35,13 @@ export class EnrollmentService {
         where: {
           studentId,
           cycleId,
-          careerId, 
+          careerId,
           status: EnrollmentStatus.ACTIVO
         },
         include: { student: true, cycle: true, career: true },
       });
       if (activeEnrollment) {
-        throw new Error(`El estudiante ya tiene una matrícula activa en el ciclo ${activeEnrollment.cycle.name} de la carrera ${activeEnrollment.career.name}`);
+        throw new BadRequestException(`El estudiante ya tiene una matrícula activa en el ciclo ${activeEnrollment.cycle.name} de la carrera ${activeEnrollment.career.name}`);
       }
       // Crear matrícula
       const enrollment = await tx.enrollment.create({
@@ -74,28 +74,15 @@ export class EnrollmentService {
       if (!carnetCost || carnetCost === 0) carnetCost = 0;
 
       const outstandingBalance = totalCost - initialPayment - discounts;
-      console.log(totalCost)
-      console.log(initialPayment)
-      console.log(outstandingBalance)
 
-      // Caso 1: Pago inicial registrado
-      if (initialPayment > 0) {
-        accountsReceivable.push({
-          studentId: studentId,
-          paymentDate: new Date(Date.now()),
-          concept: 'MATRÍCULA - CUOTA 1',
-          totalAmount: initialPayment,
-          pendingBalance: 0,
-          status: PaymentStatus.PAGADO,
-        });
-      }
-      // Caso 2: Pago por carnet (si no se ha pagado)
+      // Pago por carnet (si no se ha pagado)
       if (!paymentCarnet && carnetCost > 0) {
         accountsReceivable.push({
           studentId: studentId,
           paymentDate: new Date(Date.now()),
           concept: 'PAGO CARNET',
           totalAmount: carnetCost,
+
           pendingBalance: carnetCost,
           status: PaymentStatus.PENDIENTE,
         });
@@ -111,14 +98,26 @@ export class EnrollmentService {
         });
       }
 
-      // Caso 3: Pago en cuotas (solo si es crédito)
+      // Pago inicial registrado
+      if (initialPayment > 0) {
+        accountsReceivable.push({
+          studentId: studentId,
+          paymentDate: new Date(Date.now()),
+          concept: 'MATRÍCULA - CUOTA 1',
+          totalAmount: initialPayment,
+          pendingBalance: 0,
+          status: PaymentStatus.PAGADO,
+        });
+      }
+
+      // Pago en cuotas (solo si es crédito)
       if (credit) {
         const installmentPercentages = [0.4, 0.4, 0.2];
 
         installmentPercentages.forEach((percentage, index) => {
           accountsReceivable.push({
             studentId: studentId,
-            paymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            paymentDate: new Date(Date.now() + (index + 1) * 30 * 24 * 60 * 60 * 1000),
             concept: `MATRÍCULA - CUOTA ${index + 2}`,
             totalAmount: outstandingBalance * percentage,
             pendingBalance: outstandingBalance * percentage,
@@ -155,7 +154,11 @@ export class EnrollmentService {
   }
 
   async findOne(id: string) {
-    const enrollment = await this.prismaService.enrollment.findUnique({ where: { id, deletedAt: null } });
+    const enrollment = await this.prismaService.enrollment.findUnique(
+      {
+        where: { id, deletedAt: null },
+        include: { student: true, cycle: true, career: true }
+      });
     if (!enrollment) throw new NotFoundException('Enrollment not found');
     return enrollment;
   }
