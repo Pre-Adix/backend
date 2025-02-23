@@ -70,6 +70,7 @@ export class EnrollmentService {
       if (initialPayment > 0) {
         accountsReceivable.push({
           studentId: studentId,
+          paymentDate: Date.now(),
           concept: 'MATRÍCULA - CUOTA 1',
           totalAmount: initialPayment,
           pendingBalance: 0,
@@ -80,20 +81,32 @@ export class EnrollmentService {
       if (!paymentCarnet && carnetCost > 0) {
         accountsReceivable.push({
           studentId: studentId,
+          paymentDate: Date.now(),
           concept: 'PAGO CARNET',
           totalAmount: carnetCost,
           pendingBalance: carnetCost,
           status: PaymentStatus.PENDIENTE,
         });
+      } 
+      if (paymentCarnet && carnetCost > 0) {
+        accountsReceivable.push({
+          studentId: studentId,
+          paymentDate: Date.now(),
+          concept: 'PAGO CARNET',
+          totalAmount: carnetCost,
+          pendingBalance: 0,
+          status: PaymentStatus.PAGADO,
+        });
       }
 
       // Caso 3: Pago en cuotas (solo si es crédito)
       if (credit) {
-        const installmentPercentages = [0.3, 0.2, 0.2];
+        const installmentPercentages = [0.4, 0.4, 0.2];
 
         installmentPercentages.forEach((percentage, index) => {
           accountsReceivable.push({
             studentId: studentId,
+            paymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             concept: `MATRÍCULA - CUOTA ${index + 2}`,
             totalAmount: outstandingBalance * percentage,
             pendingBalance: outstandingBalance * percentage,
@@ -102,7 +115,8 @@ export class EnrollmentService {
         });
       } else {
         accountsReceivable.push({
-          studentId: enrollment.id,
+          studentId: studentId,
+          paymentDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           concept: 'MATRÍCULA - TOTAL',
           totalAmount: outstandingBalance,
           pendingBalance: outstandingBalance,

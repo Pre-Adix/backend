@@ -222,6 +222,7 @@ model Enrollment {
 
 model AccountReceivable {
   id             String    @id @default(uuid())
+  paymentDate    DateTime
   studentId      String    
   totalAmount    Decimal
   pendingBalance Decimal
