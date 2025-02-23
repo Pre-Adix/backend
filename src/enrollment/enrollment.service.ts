@@ -121,7 +121,11 @@ export class EnrollmentService {
 
 
   async findAll() {
-    return this.prismaService.enrollment.findMany({ where: { deletedAt: null } });
+    return this.prismaService.enrollment.findMany(
+      { 
+        where: { deletedAt: null } ,
+        include: { student: true, cycle: true, career: true}
+      });
   }
 
   async findOne(id: string) {
