@@ -30,7 +30,19 @@ export class EnrollmentService {
         notes,
       } = createEnrollmentDto;
 
-      
+      // Validar que el estudiante no tenga una matrícula activa
+      const activeEnrollment = await tx.enrollment.findFirst({
+        where: {
+          studentId,
+          cycleId,
+          careerId, 
+          status: EnrollmentStatus.ACTIVO
+        },
+        include: { student: true, cycle: true, career: true },
+      });
+      if (activeEnrollment) {
+        throw new Error(`El estudiante ya tiene una matrícula activa en el ciclo ${activeEnrollment.cycle.name} de la carrera ${activeEnrollment.career.name}`);
+      }
       // Crear matrícula
       const enrollment = await tx.enrollment.create({
         data: {
@@ -52,15 +64,15 @@ export class EnrollmentService {
         },
         include: { student: true, cycle: true, career: true },
       });
-      
+
       const accountsReceivable = [];
-      
+
       // Calcular el saldo pendiente
-      if (!discounts || discounts === 0 ) discounts = 0;
-      if (!initialPayment || initialPayment === 0 ) initialPayment = 0;
-      if (!totalCost || totalCost === 0 ) totalCost = 0;
-      if (!carnetCost || carnetCost === 0 ) carnetCost = 0;
-      
+      if (!discounts || discounts === 0) discounts = 0;
+      if (!initialPayment || initialPayment === 0) initialPayment = 0;
+      if (!totalCost || totalCost === 0) totalCost = 0;
+      if (!carnetCost || carnetCost === 0) carnetCost = 0;
+
       const outstandingBalance = totalCost - initialPayment - discounts;
       console.log(totalCost)
       console.log(initialPayment)
@@ -70,7 +82,7 @@ export class EnrollmentService {
       if (initialPayment > 0) {
         accountsReceivable.push({
           studentId: studentId,
-          paymentDate: Date.now(),
+          paymentDate: new Date(Date.now()),
           concept: 'MATRÍCULA - CUOTA 1',
           totalAmount: initialPayment,
           pendingBalance: 0,
@@ -81,17 +93,17 @@ export class EnrollmentService {
       if (!paymentCarnet && carnetCost > 0) {
         accountsReceivable.push({
           studentId: studentId,
-          paymentDate: Date.now(),
+          paymentDate: new Date(Date.now()),
           concept: 'PAGO CARNET',
           totalAmount: carnetCost,
           pendingBalance: carnetCost,
           status: PaymentStatus.PENDIENTE,
         });
-      } 
+      }
       if (paymentCarnet && carnetCost > 0) {
         accountsReceivable.push({
           studentId: studentId,
-          paymentDate: Date.now(),
+          paymentDate: new Date(Date.now()),
           concept: 'PAGO CARNET',
           totalAmount: carnetCost,
           pendingBalance: 0,
@@ -136,9 +148,9 @@ export class EnrollmentService {
 
   async findAll() {
     return this.prismaService.enrollment.findMany(
-      { 
-        where: { deletedAt: null } ,
-        include: { student: true, cycle: true, career: true}
+      {
+        where: { deletedAt: null },
+        include: { student: true, cycle: true, career: true }
       });
   }
 
