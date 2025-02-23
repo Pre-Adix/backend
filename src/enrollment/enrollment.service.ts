@@ -13,7 +13,7 @@ export class EnrollmentService {
   create(createEnrollmentDto: CreateEnrollmentDto) {
 
     return this.prismaService.$transaction(async (tx) => {
-      const {
+      let {
         studentId,
         cycleId,
         careerId,
@@ -56,12 +56,12 @@ export class EnrollmentService {
       const accountsReceivable = [];
       
       // Calcular el saldo pendiente
-      let outstandingBalance = 0;
-      if (!discounts || discounts === 0 ) {
-        outstandingBalance = Number(totalCost) - Number(initialPayment)
-      } else {
-        outstandingBalance = Number(totalCost) - Number(initialPayment) - Number(discounts);
-      }
+      if (!discounts || discounts === 0 ) discounts = 0;
+      if (!initialPayment || initialPayment === 0 ) initialPayment = 0;
+      if (!totalCost || totalCost === 0 ) totalCost = 0;
+      if (!carnetCost || carnetCost === 0 ) carnetCost = 0;
+      
+      const outstandingBalance = totalCost - initialPayment - discounts;
       console.log(totalCost)
       console.log(initialPayment)
       console.log(outstandingBalance)
@@ -70,7 +70,7 @@ export class EnrollmentService {
       if (initialPayment > 0) {
         accountsReceivable.push({
           studentId: studentId,
-          concept: 'MATRÍCULA - PAGO INICIAL',
+          concept: 'MATRÍCULA - CUOTA 1',
           totalAmount: initialPayment,
           pendingBalance: 0,
           status: PaymentStatus.PAGADO,
@@ -89,12 +89,12 @@ export class EnrollmentService {
 
       // Caso 3: Pago en cuotas (solo si es crédito)
       if (credit) {
-        const installmentPercentages = [0.3, 0.3, 0.2, 0.2];
+        const installmentPercentages = [0.3, 0.2, 0.2];
 
         installmentPercentages.forEach((percentage, index) => {
           accountsReceivable.push({
             studentId: studentId,
-            concept: `MATRÍCULA - CUOTA ${index + 1}`,
+            concept: `MATRÍCULA - CUOTA ${index + 2}`,
             totalAmount: outstandingBalance * percentage,
             pendingBalance: outstandingBalance * percentage,
             status: PaymentStatus.PENDIENTE,
@@ -103,7 +103,7 @@ export class EnrollmentService {
       } else {
         accountsReceivable.push({
           studentId: enrollment.id,
-          concept: 'MATRÍCULA',
+          concept: 'MATRÍCULA - TOTAL',
           totalAmount: outstandingBalance,
           pendingBalance: outstandingBalance,
           status: PaymentStatus.PENDIENTE,
