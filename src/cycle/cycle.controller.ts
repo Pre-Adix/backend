@@ -3,7 +3,7 @@ import { CycleService } from './cycle.service';
 import { CreateCycleDto } from './dto/create-cycle.dto';
 import { UpdateCycleDto } from './dto/update-cycle.dto';
 
-@Controller('cycle')
+@Controller('cycles')
 export class CycleController {
   constructor(private readonly cycleService: CycleService) {}
 
