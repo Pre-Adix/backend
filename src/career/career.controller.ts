@@ -3,7 +3,7 @@ import { CareerService } from './career.service';
 import { CreateCareerDto } from './dto/create-career.dto';
 import { UpdateCareerDto } from './dto/update-career.dto';
 
-@Controller('career')
+@Controller('careers')
 export class CareerController {
   constructor(private readonly careerService: CareerService) {}
 
@@ -19,16 +19,16 @@ export class CareerController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.careerService.findOne(+id);
+    return this.careerService.findOne(id);
   }
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateCareerDto: UpdateCareerDto) {
-    return this.careerService.update(+id, updateCareerDto);
+    return this.careerService.update(id, updateCareerDto);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string) {
-    return this.careerService.remove(+id);
+    return this.careerService.remove(id);
   }
 }
