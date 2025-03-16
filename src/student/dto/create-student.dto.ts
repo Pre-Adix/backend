@@ -1,10 +1,6 @@
-import {  IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, IsUrl, IsUUID, MinLength } from "class-validator"
-import { UserSexList } from "../../common/enums/user-sex.enum"
-import { Gender } from "@prisma/client"
+import {  IsEmail, IsNotEmpty, IsOptional, IsString, IsUrl, IsUUID, MinLength } from "class-validator"
 
 export class StudentDto {
-
-  code?      :string 
 
   @IsString()
   @IsNotEmpty()
@@ -17,31 +13,28 @@ export class StudentDto {
   lastName  :string
 
   @IsEmail()
+  @IsOptional()
   email?     :string  
 
   @IsString()
   phone?     :string   
 
   @IsString()
-  @IsNotEmpty()
-  @MinLength(2)
-  address   :string
+  @IsOptional()
+  address?   :string
 
   @IsUrl()
   @IsOptional()
   img?       :string
 
   @IsString()
-  @IsNotEmpty()
-  schoolId    :string
-
-  @IsEnum(
-    UserSexList,
-    {message: `Invalid type. The type must be a valid value of ${UserSexList}`}
-  )
-  gender       : Gender
+  @IsOptional()
+  school?    :string
 
   @IsOptional()
   birthday?  :Date
+
+  @IsUUID()
+  tutorId    :string
 
 }
