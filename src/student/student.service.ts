@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { StudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -11,31 +11,12 @@ export class StudentService {
   ) { }
 
   create(createStudentDto: StudentDto) {
-    let tutorId = "hola"
     return this.prismaService.student.create(
       {
-        data: {
-          code: this.generateStudentCode(createStudentDto.firstName, createStudentDto.lastName),
-          firstName: createStudentDto.firstName,
-          lastName: createStudentDto.lastName,
-          email: createStudentDto.email,
-          phone: createStudentDto.phone,
-          address: createStudentDto.address,
-          gender: createStudentDto.gender,
-          birthday: createStudentDto.birthday,
-
-          school: { connect: { id: createStudentDto.schoolId } },
-          tutor: { connect: { id: tutorId } }
-        }
+        data: { ...createStudentDto }
       });
   }
 
-  private generateStudentCode(firstName: string, lastName: string): string {
-    const year: number = new Date().getFullYear();
-    const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-    return `${year}${initials}`;
-
-  }
   findAll() {
     return this.prismaService.student.findMany(
       {
@@ -52,12 +33,44 @@ export class StudentService {
         include: { tutor: true, enrollments: true, accountReceivable: true }
       });
   }
-
+  
+  async findStudentByName(query: string) {
+    const result = await this.prismaService.student.findMany({
+      where: {
+        OR: [
+          { firstName: { contains: query, mode: 'insensitive' } },
+          { lastName: { contains: query, mode: 'insensitive' } }
+        ],
+        deletedAt: null
+      },
+      include: {
+        tutor: true,
+        enrollments: true,
+        accountReceivable: true,
+      },
+    });
+   
+    if (result.length === 0) {
+      throw new NotFoundException('Estudiante no encontrado');
+    }
+  
+    return result;
+  }
+  
+  
   update(id: string, updateStudentDto: UpdateStudentDto) {
-    return `This action updates a #${id} student`;
+    return this.prismaService.student.update(
+      {
+        where: { id: id },
+        data: updateStudentDto  
+        });
   }
 
   remove(id: string) {
-    return `This action removes a #${id} student`;
+    return this.prismaService.student.update(
+      {
+        where: { id: id },
+        data: { deletedAt: new Date() }
+      });
   }
 }
