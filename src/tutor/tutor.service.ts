@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { CreateTutorWithStudentsDto } from './dto/create-tutor-with-student.dto';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { CreateTutorDto } from './dto/create-tutor.dto';
 import { UpdateTutorDto } from './dto/update-tutor.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PaginationDto } from 'src/common';
@@ -11,41 +11,23 @@ export class TutorService {
     private prismaService: PrismaService
   ) {}
 
-  async create(dataDto: CreateTutorWithStudentsDto) {
-    const { students, ...tutorData } = dataDto;
-
+  async create(createTutorDto: CreateTutorDto) {
+    
     return this.prismaService.$transaction(async (prismaData) => {
       const existingTutor = await prismaData.tutor.findUnique({
-        where: { dni: dataDto.dni },
+        where: { dni: createTutorDto.dni },
       });
 
       if (existingTutor) {
-        throw new BadRequestException('El tutor con este DNI ya existe.');
+        throw new ConflictException('El tutor con este DNI ya existe.');
       }
-
-      // Crear el tutor
       const tutor = await prismaData.tutor.create({
-        data: {
-          ...tutorData,
-          students: {
-            create: students.map((student) => ({
-              ...student,
-              code: this.generateStudentCode(student.firstName, student.lastName),
-            })),
-          },
-        },
+        data: {...createTutorDto},
         include: { students: true },
       });
 
       return tutor;
     });
-  }
-
-  private generateStudentCode(  firstName: string, lastName: string): string {
-      const year: number = new Date().getFullYear();
-      const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-      return `${year}${initials}`;
-
   }
 
   async findAll(paginationDto:PaginationDto) {
@@ -80,7 +62,31 @@ export class TutorService {
         include: { students: true }
       }
     );
+    if (!tutor) {
+      throw new BadRequestException('El tutor no existe.');
+    }
     return tutor;
+  }
+ 
+  async searchTutorBy(query: string) {
+    const result = await this.prismaService.tutor.findMany({
+      where: {
+        OR: [
+          { dni: { contains: query, mode: 'insensitive' } },
+          { firstName: { contains: query, mode: 'insensitive' } },
+          { lastName: { contains: query, mode: 'insensitive' } }
+        ],
+        deletedAt: null
+      },
+      include: {
+        students: true,
+      },
+    });
+     if (result.length === 0) {
+          throw new NotFoundException('Estudiante no encontrado');
+        }
+      
+        return result;
   }
 
   update(id: string, updateTutorDto: UpdateTutorDto) {
@@ -88,6 +94,9 @@ export class TutorService {
   }
 
   remove(id: string) {
-    return `This action removes a #${id} tutor`;
+    return this.prismaService.tutor.update({
+      where: { id },
+      data: { deletedAt: new Date() }
+    });
   }
 }

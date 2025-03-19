@@ -1,16 +1,21 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
 import { TutorService } from './tutor.service';
-import { CreateTutorWithStudentsDto } from './dto/create-tutor-with-student.dto';
+import { CreateTutorDto } from './dto/create-tutor.dto';
 import { UpdateTutorDto } from './dto/update-tutor.dto';
 import { PaginationDto } from 'src/common';
 
-@Controller('tutor')
+@Controller('tutors')
 export class TutorController {
   constructor(private readonly tutorService: TutorService) {}
 
   @Post()
-  create(@Body() createTutorDto: CreateTutorWithStudentsDto) {
-    return this.tutorService.create(createTutorDto);
+  async create(@Body() createTutorDto: CreateTutorDto) {
+    return await this.tutorService.create(createTutorDto);
+  }
+ 
+  @Get('/searchTutor')
+  async searchTutor(@Query('query') query: string) {
+    return await this.tutorService.searchTutorBy(query);
   }
 
   @Get()
