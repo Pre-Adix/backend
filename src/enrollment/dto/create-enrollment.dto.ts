@@ -6,64 +6,87 @@ import {
   IsOptional,
   Min,
   IsString,
-  IsDateString
+  IsDateString,
+  ValidateNested
 } from 'class-validator';
-import { Transform } from 'class-transformer';
-import { format, parse } from 'date-fns';
+import { Transform, Type } from 'class-transformer';
+import { parse } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Modality, Shift, EnrollmentStatus } from '@prisma/client';
+import { Modality, Shift } from '@prisma/client';
+import { CreateTutorDto } from 'src/tutor/dto/create-tutor.dto';
+import { StudentDto } from 'src/student/dto/create-student.dto';
 
 export class CreateEnrollmentDto {
-  @IsDateString({}, { message: 'startDate debe estar en formato dd/MM/yyyy' })
-  @Transform(({ value }) => value ? parse(value, 'dd/MM/yyyy', new Date(), { locale: es }).toISOString() : null)
-  startDate: string;  
+  @IsDateString({}, { message: 'startDate debe estar en formato ISO o dd/MM/yyyy' })
+  @Transform(({ value }) => 
+    value ? parse(value, 'dd/MM/yyyy', new Date(), { locale: es }).toISOString() : null
+  )
+  startDate: string;
 
-  @IsDateString({}, { message: 'endDate debe estar en formato dd/MM/yyyy' })
-  @Transform(({ value }) => value ? parse(value, 'dd/MM/yyyy', new Date(), { locale: es }).toISOString() : null)
+  @IsDateString({}, { message: 'endDate debe estar en formato ISO o dd/MM/yyyy' })
+  @Transform(({ value }) => 
+    value ? parse(value, 'dd/MM/yyyy', new Date(), { locale: es }).toISOString() : null
+  )
   endDate: string;
 
-  @IsUUID()
+  @IsUUID('4', { message: 'userId debe ser un UUID válido' })
   studentId: string;
 
-  @IsUUID()
+  @IsUUID('4', { message: 'cycleId debe ser un UUID válido' })
   cycleId: string;
 
-  @IsUUID()
+  @IsUUID('4', { message: 'admissionId debe ser un UUID válido' })
+  admissionId: string;
+
+  @IsUUID('4', { message: 'careerId debe ser un UUID válido' })
   careerId: string;
 
-  @IsEnum(Modality, { message: `Invalid modality. Must be one of: ${Object.values(Modality).join(', ')}` })
+  @IsEnum(Modality, { message: `Modality inválida. Debe ser: ${Object.values(Modality).join(', ')}` })
   modality: Modality;
 
-  @IsEnum(Shift, { message: `Invalid shift. Must be one of: ${Object.values(Shift).join(', ')}` })
+  @IsEnum(Shift, { message: `Shift inválido. Debe ser: ${Object.values(Shift).join(', ')}` })
   shift: Shift;
 
-  @IsBoolean()
+  @IsBoolean({ message: 'credit debe ser un valor booleano' })
   credit: boolean;
 
-  @IsBoolean()
+  @IsBoolean({ message: 'paymentCarnet debe ser un valor booleano' })
   paymentCarnet: boolean;
 
-  @IsNumber()
+  @IsNumber({}, { message: 'carnetCost debe ser un número válido' })
+  @Min(0, { message: 'carnetCost no puede ser negativo' })
   carnetCost: number;
 
-  @IsNumber()
-  @Min(0)
+  @IsNumber({}, { message: 'totalCost debe ser un número válido' })
+  @Min(0, { message: 'totalCost no puede ser negativo' })
   totalCost: number;
 
-  @IsNumber()
   @IsOptional()
+  @IsNumber({}, { message: 'initialPayment debe ser un número válido' })
+  @Min(0, { message: 'initialPayment no puede ser negativo' })
   initialPayment?: number;
 
-  @IsNumber()
   @IsOptional()
+  @IsNumber({}, { message: 'discounts debe ser un número válido' })
+  @Min(0, { message: 'discounts no pueden ser negativos' })
   discounts?: number;
 
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'notes debe ser un texto' })
   notes?: string;
 
   @IsOptional()
-  @IsEnum(EnrollmentStatus)
-  status?: EnrollmentStatus;
-}
+  @IsNumber({}, { message: 'numInstallments debe ser un número válido' })
+  @Min(1, { message: 'numInstallments debe ser al menos 1' })
+  numInstallments?: number;
 
+  // // ✅ Datos del Tutor
+  // @ValidateNested()
+  // @Type(() => CreateTutorDto)
+  // tutor: CreateTutorDto;
+
+  // // ✅ Datos del Estudiante
+  // @ValidateNested()
+  // @Type(() => StudentDto)
+  // student: StudentDto;
+}
