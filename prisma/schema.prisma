@@ -9,11 +9,11 @@ datasource db {
 }
 
 // Enums optimizados
-enum EnrollmentStatus {
-  ACTIVO
-  CANCELADO
-  PENDIENTE
-}
+// enum EnrollmentStatus {
+//   ACTIVO
+//   CANCELADO
+//   PENDIENTE
+// }
 
 enum PaymentMethod {
   EFECTIVO
@@ -28,16 +28,10 @@ enum PaymentStatus {
   CANCELADO
 }
 
-// enum InstallmentStatus {
-//   PENDIENTE
-//   PAGADO
-//   VENCIDO
+// enum Gender {
+//   MASCULINO
+//   FEMENINO
 // }
-
-enum Gender {
-  MASCULINO
-  FEMENINO
-}
 
 enum TutorType {
   PADRE
@@ -66,39 +60,22 @@ model Tutor {
   phone1       String     @unique
   phone2       String?
   type         TutorType
-  address      String
   observation  String?
-  active       Boolean    @default(true)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   deletedAt    DateTime?
 
   students     Student[]  // Un tutor puede tener uno o más estudiantes
 }
-
-model School {
-  id           String     @id @default(uuid())
-  name         String     @unique // Nombre de la escuela
-  address      String
-  
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  deletedAt    DateTime?
-
-  students     Student[]  // Una escuela puede tener varios estudiantes
-}
-
 model Student {
   id           String     @id @default(uuid())
-  code         String     @unique // Código generado automáticamente
   firstName    String
   lastName     String
   email        String?    @unique
   phone        String?    @unique
-  address      String
+  address      String?
   image        String?
-  schoolId     String
-  gender       Gender
+  school       String?
   birthday     DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -106,8 +83,6 @@ model Student {
 
   tutorId      String
   tutor        Tutor       @relation(fields: [tutorId], references: [id])
-  school       School      @relation(fields: [schoolId], references: [id])
-
   attendances  Attendance[]
   results      Result[]
   enrollments  Enrollment[]
@@ -149,6 +124,16 @@ model Cycle {
 
   enrollments  Enrollment[]
   exams        Exam[]
+}
+
+model Admission {
+  id           String     @id @default(uuid())
+  name         String     @unique // Nombre de la admisión
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  enrollments  Enrollment[]
 }
 
 model Exam {
@@ -196,18 +181,20 @@ model Enrollment {
   id               String     @id @default(uuid())
   startDate        DateTime
   endDate          DateTime
+  codeStudent      String? @unique// Se genera automáticamente admision + area + 2 iniciales del nombre + 2 iniciales del apellido + 2 dígitos aleatorios
   studentId        String
   cycleId          String
+  admissionId      String
   careerId         String
   modality         Modality
   shift            Shift      // Turno: MAÑANA, TARDE, NOCHE
   credit           Boolean    @default(false) // Crédito
+  numInstallments  Int?       @default(1) // Número de cuotas
   paymentCarnet    Boolean    @default(false) // Pago de carnet
-  carnetCost       Decimal    @db.Decimal(10, 2)
+  carnetCost       Decimal    @db.Decimal(10, 2) @default(0.00) // Costo del carnet
   totalCost        Decimal    @db.Decimal(10, 2)  // Costo total de la matrícula
-  initialPayment   Decimal    @db.Decimal(10, 2) @default(0.00)
-  discounts        Decimal    @db.Decimal(10, 2) @default(0.00) // Descuentos
-  status           EnrollmentStatus @default(ACTIVO)
+  initialPayment   Decimal?    @db.Decimal(10, 2) @default(0.00)
+  discounts        Decimal?    @db.Decimal(10, 2) @default(0.00) // Descuentos
   notes            String?
 
   createdAt        DateTime   @default(now())
@@ -216,6 +203,7 @@ model Enrollment {
 
   student          Student    @relation(fields: [studentId], references: [id])
   cycle            Cycle      @relation(fields: [cycleId], references: [id])
+  admission        Admission  @relation(fields: [admissionId], references: [id])
   career           Career     @relation(fields: [careerId], references: [id])
 
 }
@@ -227,7 +215,8 @@ model AccountReceivable {
   totalAmount    Decimal
   pendingBalance Decimal
   status         PaymentStatus
-  concept        String         // Concepto de la cuenta por cobrar (e.g., "MATRÍCULA", "PAGO CARNET")
+  concept        String?         // Concepto de la cuenta por cobrar (e.g., "MATRÍCULA", "PAGO CARNET")
+  dueDate        DateTime  // Fecha de vencimiento para el pago
 
   student        Student    @relation(fields: [studentId], references: [id])
   payments Payment[]
@@ -238,9 +227,9 @@ model AccountReceivable {
 model Payment {
   id             String    @id @default(uuid())
   accountReceivableId String
-  invoiceNumber  String
+  invoiceNumber  String    @unique
   dueDate        DateTime
-  amountPaid     Decimal
+  amountPaid     Decimal   @db.Decimal(10, 2)
   paymentDate    DateTime  @default(now())
   paymentMethod  PaymentMethod
   status         PaymentStatus
