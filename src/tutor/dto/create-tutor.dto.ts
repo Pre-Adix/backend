@@ -23,14 +23,13 @@ export class CreateTutorDto {
   @IsEmail()
   @IsOptional()
   @MinLength(10)
-  email?      :string  
+  email      :string  
 
   @IsNotEmpty()
   @MinLength(9)
   phone1      :string 
   
   @IsString()
-  @MinLength(9)
   @IsOptional()
   phone2?     :string
 

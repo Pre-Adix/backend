@@ -3,34 +3,45 @@ import { CreateTutorDto } from './dto/create-tutor.dto';
 import { UpdateTutorDto } from './dto/update-tutor.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { PaginationDto } from 'src/common';
+import { Tutor } from '@prisma/client';
 
 @Injectable()
 export class TutorService {
 
   constructor(
     private prismaService: PrismaService
-  ) {}
+  ) { }
+
+  async checkDniAvailability(dni: string): Promise<{ available: boolean; tutor?: Tutor }> {
+    const tutor = await this.prismaService.tutor.findUnique({
+      where: { dni },
+      include: { students: true }
+    });
+    return {
+      available: !tutor,
+      tutor: tutor || undefined,
+    };
+  }
 
   async create(createTutorDto: CreateTutorDto) {
-    
-    return this.prismaService.$transaction(async (prismaData) => {
-      const existingTutor = await prismaData.tutor.findUnique({
-        where: { dni: createTutorDto.dni },
-      });
 
-      if (existingTutor) {
-        throw new ConflictException('El tutor con este DNI ya existe.');
-      }
-      const tutor = await prismaData.tutor.create({
-        data: {...createTutorDto},
-        include: { students: true },
-      });
-
-      return tutor;
+    const { available } = await this.checkDniAvailability(createTutorDto.dni);
+    if (!available) {
+      throw new ConflictException('El tutor con este DNI ya existe.');
+    }
+    const emailExists = await this.prismaService.tutor.findUnique({
+      where: { email: createTutorDto.email },
+    });
+    if (emailExists) {
+      throw new ConflictException('El correo electrónico ya está en uso.');
+    }
+    return await this.prismaService.tutor.create({
+      data: createTutorDto,
+      include: { students: true },
     });
   }
 
-  async findAll(paginationDto:PaginationDto) {
+  async findAll(paginationDto: PaginationDto) {
     const { limit, page } = paginationDto;
     const totalPage = await this.prismaService.tutor.count(
       {
@@ -38,9 +49,9 @@ export class TutorService {
       }
     );
     const lastPage = Math.ceil(totalPage / limit);
-    
-    return{
-      meta:{
+
+    return {
+      meta: {
         total: totalPage,
         lastPage,
         page
@@ -56,9 +67,15 @@ export class TutorService {
   }
 
   async findOne(id: string) {
-    const tutor = await this.prismaService.tutor.findUnique(
+    const tutor = await this.prismaService.tutor.findFirst(
       {
-        where: { id: id },
+        where: {
+          deletedAt: null,
+          OR: [
+            { dni: id },
+            { id: id }
+          ]
+        },
         include: { students: true }
       }
     );
@@ -67,8 +84,8 @@ export class TutorService {
     }
     return tutor;
   }
- 
-  async searchTutorBy(query: string) {
+
+  async tutorSearch(query: string) {
     const result = await this.prismaService.tutor.findMany({
       where: {
         OR: [
@@ -82,19 +99,20 @@ export class TutorService {
         students: true,
       },
     });
-     if (result.length === 0) {
-          throw new NotFoundException('Estudiante no encontrado');
-        }
-      
-        return result;
+
+    return result;
   }
 
-  update(id: string, updateTutorDto: UpdateTutorDto) {
-    return `This action updates a #${id} tutor`;
+  async update(id: string, updateTutorDto: UpdateTutorDto) {
+    return await this.prismaService.tutor.update({
+      where: { id },
+      data: updateTutorDto,
+      include: { students: true }
+    });
   }
 
-  remove(id: string) {
-    return this.prismaService.tutor.update({
+  async remove(id: string) {
+    return await this.prismaService.tutor.update({
       where: { id },
       data: { deletedAt: new Date() }
     });

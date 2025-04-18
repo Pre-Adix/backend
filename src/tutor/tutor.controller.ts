@@ -8,14 +8,19 @@ import { PaginationDto } from 'src/common';
 export class TutorController {
   constructor(private readonly tutorService: TutorService) {}
 
+  @Get('check-dni/:dni')
+  async checkDni(@Param('dni') dni: string) {
+    return this.tutorService.checkDniAvailability(dni);
+  }
+
   @Post()
   async create(@Body() createTutorDto: CreateTutorDto) {
     return await this.tutorService.create(createTutorDto);
   }
  
-  @Get('/searchTutor')
-  async searchTutor(@Query('query') query: string) {
-    return await this.tutorService.searchTutorBy(query);
+  @Get('/tutorSearch')
+  async tutorSearch(@Query('query') query: string) {
+    return await this.tutorService.tutorSearch(query);
   }
 
   @Get()
