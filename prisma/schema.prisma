@@ -8,13 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Enums optimizados
-// enum EnrollmentStatus {
-//   ACTIVO
-//   CANCELADO
-//   PENDIENTE
-// }
-
 enum PaymentMethod {
   EFECTIVO
   TARJETA
@@ -25,13 +18,9 @@ enum PaymentStatus {
   PENDIENTE
   PAGADO
   VENCIDO
-  CANCELADO
+  ANULADO
 }
 
-// enum Gender {
-//   MASCULINO
-//   FEMENINO
-// }
 
 enum TutorType {
   PADRE
@@ -50,14 +39,13 @@ enum Modality {
   VIRTUAL
 }
 
-// Modelos optimizados
 model Tutor {
   id           String     @id @default(uuid())
   dni          String     @unique
   firstName    String
   lastName     String
-  email        String?    @unique
-  phone1       String     @unique
+  email        String    @unique
+  phone1       String     
   phone2       String?
   type         TutorType
   observation  String?
@@ -67,12 +55,14 @@ model Tutor {
 
   students     Student[]  // Un tutor puede tener uno o más estudiantes
 }
+
 model Student {
   id           String     @id @default(uuid())
+  dni          String?    
   firstName    String
   lastName     String
-  email        String?    @unique
-  phone        String?    @unique
+  email        String    @unique
+  phone        String?    
   address      String?
   image        String?
   school       String?
@@ -206,20 +196,24 @@ model Enrollment {
   admission        Admission  @relation(fields: [admissionId], references: [id])
   career           Career     @relation(fields: [careerId], references: [id])
 
+
+  // AccountReceivable AccountReceivable[]
 }
 
 model AccountReceivable {
   id             String    @id @default(uuid())
   paymentDate    DateTime
   studentId      String    
+  // enrollmentId   String
   totalAmount    Decimal
   pendingBalance Decimal
   status         PaymentStatus
   concept        String?         // Concepto de la cuenta por cobrar (e.g., "MATRÍCULA", "PAGO CARNET")
   dueDate        DateTime  // Fecha de vencimiento para el pago
 
+  // enrollment     Enrollment @relation(fields: [enrollmentId], references: [id])
   student        Student    @relation(fields: [studentId], references: [id])
-  payments Payment[]
+  payments       Payment[]
 
   @@map("account_receivable")
 }
