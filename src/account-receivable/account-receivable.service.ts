@@ -10,7 +10,7 @@ export class AccountReceivableService {
 
 
   async create(dto: CreateAccountReceivableDto): Promise<AccountReceivable> {
-    return this.prismaService.accountReceivable.create({
+    return await this.prismaService.accountReceivable.create({
       data: {
         studentId: dto.studentId,
         paymentDate: new Date(), // Fecha de creación de la cuenta por cobrar
@@ -43,6 +43,19 @@ export class AccountReceivableService {
     return account;
   }
 
+  async findByStudentId(id: string): Promise<AccountReceivable[]> {
+    const account = await this.prismaService.accountReceivable.findMany({
+      where: { studentId: id },
+      include: { student: true, payments: true },
+    });
+
+    if (!account) {
+      throw new NotFoundException(`Cuenta por cobrar del Estudiante con ID ${id} no encontrada`);
+    }
+    return account;
+  }
+
+
   async update(id: string, dto: UpdateAccountReceivableDto): Promise<AccountReceivable> {
     const account = await this.findOne(id);
 
@@ -63,7 +76,7 @@ export class AccountReceivableService {
   remove(id: string): Promise<AccountReceivable> {
     return this.prismaService.accountReceivable.update({
       where: { id },
-      data: { status: PaymentStatus.CANCELADO },
+      data: { status: PaymentStatus.ANULADO },
     });
   }
 }

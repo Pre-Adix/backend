@@ -3,7 +3,7 @@ import { AccountReceivableService } from './account-receivable.service';
 import { CreateAccountReceivableDto } from './dto/create-account-receivable.dto';
 import { UpdateAccountReceivableDto } from './dto/update-account-receivable.dto';
 
-@Controller('account-receivable')
+@Controller('account-receivables')
 export class AccountReceivableController {
   constructor(private readonly accountReceivableService: AccountReceivableService) {}
 
@@ -16,11 +16,17 @@ export class AccountReceivableController {
   findAll() {
     return this.accountReceivableService.findAll();
   }
-
+  
+  @Get('/student/:id')
+  findStudentById(@Param('id') id: string) {
+    return this.accountReceivableService.findByStudentId(id);
+  }
+  
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.accountReceivableService.findOne(id);
   }
+
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateAccountReceivableDto: UpdateAccountReceivableDto) {
