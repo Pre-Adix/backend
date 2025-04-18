@@ -7,18 +7,24 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class StudentService {
 
   constructor(
-    private readonly prismaService: PrismaService
+    private prismaService: PrismaService
   ) { }
 
-  create(createStudentDto: StudentDto) {
-    return this.prismaService.student.create(
+  async create(createStudentDto: StudentDto) {
+    if (createStudentDto.birthday){
+      // Convertir la fecha de cumpleaños a un objeto Date
+      // y luego a una cadena en formato ISO 8601
+      const birthday = new Date(createStudentDto.birthday);
+      createStudentDto.birthday = birthday;
+    }
+    return await this.prismaService.student.create(
       {
         data: { ...createStudentDto }
       });
   }
 
-  findAll() {
-    return this.prismaService.student.findMany(
+  async findAll() {
+    return await this.prismaService.student.findMany(
       {
         where: { deletedAt: null },
         include: { tutor: true, enrollments: true, accountReceivable: true }
@@ -26,8 +32,8 @@ export class StudentService {
     );
   }
 
-  findOne(id: string) {
-    return this.prismaService.student.findUnique(
+  async findOne(id: string) {
+    return await this.prismaService.student.findUnique(
       {
         where: { id: id },
         include: { tutor: true, enrollments: true, accountReceivable: true }
@@ -39,7 +45,8 @@ export class StudentService {
       where: {
         OR: [
           { firstName: { contains: query, mode: 'insensitive' } },
-          { lastName: { contains: query, mode: 'insensitive' } }
+          { lastName: { contains: query, mode: 'insensitive' } },
+          { tutorId: { contains: query, mode: 'insensitive' } },
         ],
         deletedAt: null
       },
@@ -50,24 +57,24 @@ export class StudentService {
       },
     });
    
-    if (result.length === 0) {
-      throw new NotFoundException('Estudiante no encontrado');
-    }
+    // if (result.length === 0) {
+    //   throw new NotFoundException('Estudiante no encontrado');
+    // }
   
     return result;
   }
   
   
-  update(id: string, updateStudentDto: UpdateStudentDto) {
-    return this.prismaService.student.update(
+  async update(id: string, updateStudentDto: UpdateStudentDto) {
+    return await this.prismaService.student.update(
       {
         where: { id: id },
         data: updateStudentDto  
         });
   }
 
-  remove(id: string) {
-    return this.prismaService.student.update(
+  async remove(id: string) {
+    return await this.prismaService.student.update(
       {
         where: { id: id },
         data: { deletedAt: new Date() }

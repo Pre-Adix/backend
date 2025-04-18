@@ -12,9 +12,12 @@ export class StudentDto {
   @MinLength(2)
   lastName  :string
 
-  @IsEmail()
+  @IsString()
   @IsOptional()
-  email?     :string  
+  dni?     :string
+
+  @IsEmail()
+  email     :string  
 
   @IsString()
   phone?     :string   
@@ -23,7 +26,6 @@ export class StudentDto {
   @IsOptional()
   address?   :string
 
-  @IsUrl()
   @IsOptional()
   img?       :string
 
