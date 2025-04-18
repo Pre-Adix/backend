@@ -1,122 +1,138 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
 import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma, Enrollment,  PaymentStatus, PaymentMethod } from '@prisma/client';
+import { Prisma, Enrollment, PaymentStatus, PaymentMethod } from '@prisma/client';
 import { AccountReceivableService } from 'src/account-receivable/account-receivable.service';
 import { PaymentService } from 'src/payment/payment.service';
+import { PaginationDto } from 'src/common';
+// import { EnrollmentWithDetails } from './types/enrollment.types';
 
 type CompatibleUpdateEnrollmentDto = Omit<UpdateEnrollmentDto, 'student' | 'tutor'>;
 
 @Injectable()
 export class EnrollmentService {
+
+  private readonly logger = new Logger(EnrollmentService.name);
+
   constructor(
     private readonly prismaService: PrismaService,
     private readonly accountReceivableService: AccountReceivableService,
     private readonly paymentService: PaymentService,
   ) { }
 
+  async create(
+    createEnrollmentDto: CreateEnrollmentDto
+  ): Promise<{ message: string; enrollment: Enrollment }> {
+    try {
+      return await this.prismaService.$transaction(async (tx: Prisma.TransactionClient) => {
+        // Paso 1: Validar y crear la matrícula
+        const enrollment = await this.validateAndCreateEnrollment(tx, createEnrollmentDto);
 
-  async create(createEnrollmentDto: CreateEnrollmentDto): Promise<{ message: string; enrollment: Enrollment }> {
+        // Paso 2: Obtener datos completos de la matrícula
+        // const fullEnrollment = await this.getFullEnrollmentDetails(tx, enrollment.id);
+        const fullEnrollment = await tx.enrollment.findUnique({
+          where: { id: enrollment.id },
+          include: {
+            student: { select: { firstName: true, lastName: true } },
+            career: { select: { area: { select: { name: true } } } },
+            admission: { select: { name: true } },
+          },
+        });
 
-    const newEnrollment = await this.prismaService.$transaction(async (tx: Prisma.TransactionClient) => {
+        if (!fullEnrollment) {
+          throw new NotFoundException('Enrollment not found after creation');
+        }
 
-      // Crear la matrícula
-      const enrollment = await this.validateAndCreateEnrollment(tx, createEnrollmentDto);
+        // Paso 3: Generar código de estudiante
+        const codeStudent = await this.generateCodeStudent(tx, fullEnrollment);
 
-      // Crear las cuentas por cobrar (cuotas)
-      await this.createAccountReceivable(tx, createEnrollmentDto, enrollment);
-      
-      const fullEnrollment = await tx.enrollment.findUnique({
-        where: { id: enrollment.id },
-        include: {
-          student: { select: { firstName: true, lastName: true } },
-          career: { select: { area: { select: { name: true } } } },
-          admission: { select: { name: true } },
-        },
+        // Paso 4: Crear cuentas por cobrar (cuotas)
+        await this.createAccountReceivable(createEnrollmentDto, enrollment, codeStudent);
+
+        // Paso 5: Actualizar matrícula con código de estudiante
+        await this.updateEnrollmentWithStudentCode(tx, enrollment.id, codeStudent);
+
+        // Retornar resultado
+        return this.buildSuccessResponse(enrollment, codeStudent);
       });
+    } catch (error) {
+      this.handleCreationError(error);
+    }
+  }
 
-      if (!fullEnrollment) {
-        throw new NotFoundException('Enrollment not found after creation');
-      }
-      const codeStudent = await this.generateCodeStudent(tx, fullEnrollment);
-      await tx.enrollment.update({ where: { id: enrollment.id }, data: { codeStudent } });
+  // Métodos auxiliares privados para mejor organización
 
-      return { message: 'Matrícula creada exitosamente', enrollment: { ...enrollment, codeStudent } };
+  private async getFullEnrollmentDetails(
+    tx: Prisma.TransactionClient,
+    enrollmentId: string
+  ): Promise<Enrollment> {
+    const fullEnrollment = await tx.enrollment.findUnique({
+      where: { id: enrollmentId },
+      include: {
+        student: { select: { firstName: true, lastName: true } },
+        career: { select: { area: { select: { name: true } } } },
+        admission: { select: { name: true } },
+      },
     });
-    return newEnrollment;
+
+    if (!fullEnrollment) {
+      throw new NotFoundException('Enrollment not found after creation');
+    }
+
+    return fullEnrollment;
+  }
+
+  private async updateEnrollmentWithStudentCode(
+    tx: Prisma.TransactionClient,
+    enrollmentId: string,
+    codeStudent: string
+  ): Promise<void> {
+    await tx.enrollment.update({
+      where: { id: enrollmentId },
+      data: { codeStudent }
+    });
+  }
+
+  private buildSuccessResponse(
+    enrollment: Enrollment,
+    codeStudent: string
+  ): { message: string; enrollment: Enrollment } {
+    return {
+      message: 'Matrícula creada exitosamente',
+      enrollment: { ...enrollment, codeStudent }
+    };
+  }
+
+  private handleCreationError(error: Error): never {
+    if (error instanceof NotFoundException) {
+      throw error;
+    }
+
+    // Aquí puedes agregar más manejo de errores específicos
+    this.logger.error('Error creating enrollment', error.stack);
+    throw new InternalServerErrorException('Failed to create enrollment');
   }
 
   private async createAccountReceivable(
-    tx: Prisma.TransactionClient,
     dto: CreateEnrollmentDto,
-    enrollment: Enrollment
+    enrollment: Enrollment,
+    studentCode: string
   ) {
     const totalAmount = dto.totalCost - (dto.discounts || 0);
     const numberOfInstallments = dto.credit ? dto.numInstallments || 4 : 1;
     const amountPerInstallment = totalAmount / numberOfInstallments;
-
-    let quote = 0
-
-    if(dto.initialPayment >= amountPerInstallment) {
-      quote = 1
-      const initialAccount = await this.accountReceivableService.create({
-        studentId: enrollment.studentId,
-        totalAmount: amountPerInstallment,
-        pendingBalance: amountPerInstallment,
-        status: PaymentStatus.PAGADO,
-        concept: 'Matrícula - Cuota 1',
-        dueDate: new Date(),
-      });
-      
-      
-      await this.paymentService.create({
-        accountReceivableId: initialAccount.id,
-        invoiceNumber: `INV-${initialAccount.id}-0`,
-        dueDate: new Date(),
-        amountPaid: dto.initialPayment,
-        paymentMethod: PaymentMethod.EFECTIVO,
-        status: PaymentStatus.PAGADO,
-        notes: 'Pago correspondiente a cuota 1',
-        paymentDate: new Date(),
-      });
-
-    }
-  
-    // Crear cuentas por cobrar mensuales según número de cuotas
-    for (quote ; quote < numberOfInstallments; quote++) {
-      const dueDate = this.getNextDueDate(quote);
-  
-      const accountReceivable = await this.accountReceivableService.create({
-        studentId: enrollment.studentId,
-        totalAmount: amountPerInstallment,
-        pendingBalance: amountPerInstallment,
-        concept: `Matrícula - Cuota ${quote + 1}`,
-        dueDate,
-      });
-  
-      await this.paymentService.create({
-        accountReceivableId: accountReceivable.id,
-        invoiceNumber: `INV-${accountReceivable.id}-${quote + 1}`,
-        dueDate,
-        amountPaid: 0,
-        paymentMethod: PaymentMethod.EFECTIVO,
-        status: PaymentStatus.PENDIENTE,
-        notes: `Pago correspondiente a cuota ${quote + 1}`,
-        paymentDate: new Date(),
-      });
-    }
-  
     // Crear cuenta por cobrar para carnet si no ha sido pagado
     if (!dto.paymentCarnet) {
       const carnetAccount = await this.accountReceivableService.create({
         studentId: enrollment.studentId,
+        // enrollmentId: enrollment.id,
         totalAmount: dto.carnetCost || 0,
         pendingBalance: dto.carnetCost || 0,
-        concept: 'Pago de Carnet',
+        concept: `Pago de Carnet - ${studentCode}`,
         dueDate: this.getNextDueDate(0),
       });
-  
+
       await this.paymentService.create({
         accountReceivableId: carnetAccount.id,
         invoiceNumber: `INV-${carnetAccount.id}`,
@@ -124,19 +140,19 @@ export class EnrollmentService {
         amountPaid: 0,
         paymentMethod: PaymentMethod.EFECTIVO,
         status: PaymentStatus.PENDIENTE,
-        notes: 'Pago de carnet pendiente',
+        notes: `Pago de carnet pendiente - ${studentCode}`,
         paymentDate: new Date(),
       });
     } else {
-      // Si ya pagó el carnet, registrar el pago automáticamente como COMPLETADO
+      // Si ya pagó el carnet, registrar el pago automáticamente como PAGADO
       const carnetAccount = await this.accountReceivableService.create({
         studentId: enrollment.studentId,
         totalAmount: dto.carnetCost || 0,
         pendingBalance: 0,
-        concept: 'Pago de Carnet',
+        concept: `Pago de Carnet - ${studentCode}`,
         dueDate: this.getNextDueDate(0),
       });
-  
+
       await this.paymentService.create({
         accountReceivableId: carnetAccount.id,
         invoiceNumber: `INV-${carnetAccount.id}`,
@@ -144,12 +160,52 @@ export class EnrollmentService {
         amountPaid: dto.carnetCost || 0,
         paymentMethod: PaymentMethod.EFECTIVO,
         status: PaymentStatus.PAGADO,
-        notes: 'Pago de carnet realizado',
+        notes: `Pago de carnet realizado - ${studentCode}`,
         paymentDate: new Date(),
       });
     }
+
+    let quote = 0
+
+    if (dto.initialPayment >= amountPerInstallment) {
+      quote = 1
+      const initialAccount = await this.accountReceivableService.create({
+        studentId: enrollment.studentId,
+        totalAmount: amountPerInstallment,
+        pendingBalance: amountPerInstallment,
+        status: PaymentStatus.PAGADO,
+        concept: `Matrícula - Cuota 1 - ${studentCode}`,
+        dueDate: new Date(),
+      });
+
+
+      await this.paymentService.create({
+        accountReceivableId: initialAccount.id,
+        invoiceNumber: `INV-${initialAccount.id}-0`,
+        dueDate: new Date(),
+        amountPaid: dto.initialPayment,
+        paymentMethod: PaymentMethod.EFECTIVO,
+        status: PaymentStatus.PAGADO,
+        notes: `Pago correspondiente a cuota 1 - ${studentCode}`,
+        paymentDate: new Date(),
+      });
+
+    }
+
+    // Crear cuentas por cobrar mensuales según número de cuotas
+    for (quote; quote < numberOfInstallments; quote++) {
+      const dueDate = this.getNextDueDate(quote);
+
+      await this.accountReceivableService.create({
+        studentId: enrollment.studentId,
+        totalAmount: amountPerInstallment,
+        pendingBalance: amountPerInstallment,
+        concept: `Matrícula - Cuota ${quote + 1} - ${studentCode}`,
+        dueDate,
+      });
+    }
   }
-  
+
   private getNextDueDate(index: number = 0): Date {
     const today = new Date();
     const nextDueDate = new Date(today.setMonth(today.getMonth() + index)); // Incrementamos el mes para la próxima cuota
@@ -162,7 +218,7 @@ export class EnrollmentService {
     dto: CreateEnrollmentDto
   ): Promise<Enrollment> {
     const { studentId, cycleId, careerId, admissionId } = dto;
-    
+
 
     const activeEnrollment = await tx.enrollment.findFirst({
       where: { studentId, cycleId, careerId, admissionId, deletedAt: null },
@@ -182,6 +238,7 @@ export class EnrollmentService {
         modality: dto.modality,
         shift: dto.shift,
         credit: dto.credit,
+        numInstallments: dto.numInstallments,
         paymentCarnet: dto.paymentCarnet,
         carnetCost: dto.carnetCost,
         totalCost: dto.totalCost,
@@ -192,7 +249,7 @@ export class EnrollmentService {
         cycle: { connect: { id: dto.cycleId } },
         admission: { connect: { id: dto.admissionId } },
         career: { connect: { id: dto.careerId } },
-        
+
       },
       include: {
         student: { select: { firstName: true, lastName: true } },
@@ -228,25 +285,51 @@ export class EnrollmentService {
 
     // Construir la base del código
     const codeBase = `${admissionName}-${area.name}-${nameInitials}`.replace(/\s+/g, '-');
+    // const codeBase = `${admissionName}-${area.name}`.replace(/\s+/g, '-');
 
     // Asegurarse de que el código generado sea único
     let counter = 1;
     let finalCode: string;
     do {
-      finalCode = `${codeBase}-${String(counter).padStart(2, '0')}`;
+      finalCode = `${codeBase}-${String(counter).padStart(3, '0')}`;
       counter++;
     } while (await tx.enrollment.findUnique({ where: { codeStudent: finalCode } }));
 
     return finalCode;
   }
 
-  async findAll(): Promise<Enrollment[]> {
+  async findAll(paginationDto: PaginationDto) {
+
+    const { limit, page } = paginationDto;
+    const totalPage = await this.prismaService.enrollment.count(
+      {
+        where: { deletedAt: null }
+      }
+    );
+    const lastPage = Math.ceil(totalPage / limit);
+
     const enrollment = await this.prismaService.enrollment.findMany({
       where: { deletedAt: null },
       include: { student: true, cycle: true, career: { include: { area: true } }, admission: true }
     });
-    if(enrollment.length <= 0) throw new NotFoundException('Enrollment not found');
-    return enrollment;
+    if (enrollment.length <= 0) {
+      return {
+        meta: {
+          total: 0,
+          lastPage: 0,
+          page: 0
+        },
+        data: []
+      };
+    }
+    return {
+      meta: {
+        total: totalPage,
+        lastPage,
+        page
+      },
+      data: enrollment
+    };
   }
 
   async findOne(id: string): Promise<Enrollment> {
@@ -258,13 +341,57 @@ export class EnrollmentService {
     return enrollment;
   }
 
-  
+
   async update(id: string, updateEnrollmentDto: CompatibleUpdateEnrollmentDto): Promise<Enrollment> {
-    
+
     return this.prismaService.enrollment.update({ where: { id }, data: updateEnrollmentDto });
   }
 
   async remove(id: string): Promise<Enrollment> {
-    return this.prismaService.enrollment.update({ where: { id }, data: { deletedAt: new Date() } });
+
+    const enrollment = await this.prismaService.enrollment.findUnique({ where: { id } });
+
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+
+    if (enrollment.deletedAt) throw new BadRequestException('Enrollment already deleted');
+
+    const hasActiveReceivables = await this.prismaService.accountReceivable.findMany({
+      where: {
+        concept: { contains: enrollment.codeStudent },
+      },
+    });
+
+    if (hasActiveReceivables) {
+      const hasPayments = await this.prismaService.payment.findMany({
+        where: {
+          accountReceivableId: hasActiveReceivables[0].id,
+        },
+      });
+      
+      while (hasActiveReceivables.length > 0) {
+        const accountReceivable = hasActiveReceivables.pop();
+        if (accountReceivable) {
+          await this.prismaService.accountReceivable.update({
+            where: { id: accountReceivable.id },
+            data: { status: PaymentStatus.ANULADO },
+          });
+        }
+      }
+      
+      if (hasPayments) {
+        while (hasPayments.length > 0) {
+          const payment = hasPayments.pop();
+          if (payment) {
+            await this.prismaService.payment.update({
+              where: { id: payment.id },
+              data: { status: PaymentStatus.ANULADO },
+            });
+          }
+        }
+      }
+    }
+
+    // Si no hay cuentas por cobrar activas ni pagos, eliminar la matrícula
+    return await this.prismaService.enrollment.update({ where: { id }, data: { deletedAt: new Date() } });
   }
 }

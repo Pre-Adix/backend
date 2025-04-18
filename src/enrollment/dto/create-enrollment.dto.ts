@@ -6,30 +6,27 @@ import {
   IsOptional,
   Min,
   IsString,
-  IsDateString,
-  ValidateNested
+  IsDateString
 } from 'class-validator';
-import { Transform, Type } from 'class-transformer';
-import { parse } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { Transform } from 'class-transformer';
 import { Modality, Shift } from '@prisma/client';
-import { CreateTutorDto } from 'src/tutor/dto/create-tutor.dto';
-import { StudentDto } from 'src/student/dto/create-student.dto';
 
 export class CreateEnrollmentDto {
   @IsDateString({}, { message: 'startDate debe estar en formato ISO o dd/MM/yyyy' })
-  @Transform(({ value }) => 
-    value ? parse(value, 'dd/MM/yyyy', new Date(), { locale: es }).toISOString() : null
-  )
+    @Transform(({ value }) => {
+      const date = new Date(value);
+      return isNaN(date.getTime()) ? null : date.toISOString();
+    })
   startDate: string;
 
   @IsDateString({}, { message: 'endDate debe estar en formato ISO o dd/MM/yyyy' })
-  @Transform(({ value }) => 
-    value ? parse(value, 'dd/MM/yyyy', new Date(), { locale: es }).toISOString() : null
-  )
+  @Transform(({ value }) => {
+    const date = new Date(value);
+    return isNaN(date.getTime()) ? null : date.toISOString();
+  })
   endDate: string;
 
-  @IsUUID('4', { message: 'userId debe ser un UUID válido' })
+  @IsUUID('4', { message: 'studentId debe ser un UUID válido' })
   studentId: string;
 
   @IsUUID('4', { message: 'cycleId debe ser un UUID válido' })
