@@ -17,10 +17,21 @@ export class PaymentController {
     return this.paymentService.findAll();
   }
 
+  @Get('account/:id')
+  findByAccount(@Param('id') id: string) {
+    return this.paymentService.findPaymentsByAccount(id);
+  }
+
+  @Get('student/:id')
+  findByStudent(@Param('id') id: string) {
+    return this.paymentService.findPaymentsByStudent(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.paymentService.findOne(id);
   }
+
 
   // @Patch(':id')
   // update(@Param('id') id: string, @Body() updatePaymentDto: UpdatePaymentDto) {

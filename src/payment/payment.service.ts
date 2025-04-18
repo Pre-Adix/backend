@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { Payment, PaymentMethod, PaymentStatus } from '@prisma/client';
+import { Payment, PaymentStatus } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
@@ -21,15 +21,7 @@ export class PaymentService {
     }
 
     const payment = await this.prisma.payment.create({
-      data: {
-        accountReceivableId: dto.accountReceivableId,
-        invoiceNumber: dto.invoiceNumber,
-        dueDate: dto.dueDate,
-        amountPaid: dto.amountPaid,
-        paymentMethod: PaymentMethod.EFECTIVO,
-        status: PaymentStatus.PAGADO,
-        notes: dto.notes,
-      },
+      data: { ...dto },
     });
 
     // Actualizar el saldo pendiente de la cuenta por cobrar
@@ -63,10 +55,40 @@ export class PaymentService {
     return payment;
   }
 
+  async update(id: string, dto: CreatePaymentDto): Promise<Payment> {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id },
+    });
+
+    if (!payment) {
+      throw new NotFoundException(`Pago con ID ${id} no encontrado`);
+    }
+
+    const updatedPayment = await this.prisma.payment.update({
+      where: { id },
+      data: { ...dto },
+    });
+
+    return updatedPayment;
+  }
+
+  async findPaymentsByStudent(studentId: string): Promise<Payment[]> {
+    return this.prisma.payment.findMany({
+      where: { accountReceivable: { studentId } },
+    });
+  }
+
+  async findPaymentsByAccount(accountId: string): Promise<Payment[]> {
+    return this.prisma.payment.findMany({
+      where: { accountReceivableId: accountId },
+    });
+  }
+
+
   async remove(id: string): Promise<void> {
     await this.prisma.payment.update({
       where: { id },
-      data: { status: PaymentStatus.CANCELADO },
+      data: { status: PaymentStatus.ANULADO },
     })
   }
 }
